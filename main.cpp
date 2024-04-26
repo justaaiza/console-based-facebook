@@ -903,7 +903,6 @@ int main()
     mainApp.PageDisplay();
     mainApp.PostDisplay();
 
-    _CrtDumpMemoryLeaks();
     return 0;
 }
 
