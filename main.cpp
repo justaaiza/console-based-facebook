@@ -12,6 +12,7 @@ class Controller;
 class Comments;
 class Activity;
 class Memory;
+class PostContent;
 
 class Helpers
 {
@@ -28,7 +29,7 @@ public:
         return true;
     }
 
-    static int StringLength(char* str)
+    static int StringLength(const char* str)
     {
         int strLength = 0;
 
@@ -38,7 +39,7 @@ public:
         return strLength;
     }
 
-    static void StringCopy(char* str1, char* str2)
+    static void StringCopy(char* str1, const char* str2)
     {
         char* temp = str1;
 
@@ -50,7 +51,7 @@ public:
         *temp = '\0';
     }
 
-    static char* GetStringFromBuffer(char* buffer)
+    static char* GetStringFromBuffer(const char* buffer)
     {
         int strLen = StringLength(buffer);
         char* str = 0;
@@ -62,8 +63,39 @@ public:
         return str;
     }
 
+    static char* StrConcat(const char* a, const char* b)
+    {
+        int strLen1 = StringLength(a);
+        int strLen2 = StringLength(b);
+        int len = strLen1 + strLen2;
+
+        char* str = 0;
+        if (len > 0)
+        {
+            str = new char[len + 1];
+           
+            int index = 0;
+
+            for (int i = 0; i < strLen1; i++)
+            {
+                str[index] = a[i];
+                index++;
+            }
+            
+            for (int i = 0; i < strLen2; i++)
+            {
+                str[index] = b[i];
+                index++;
+            }
+            str[index] = '\0';
+        }
+        return str;
+    }
+
 
 };
+
+//--------------------------------DATE-------------------------------------------
 
 class Date
 {
@@ -71,20 +103,21 @@ class Date
     int month;
     int year;
     
-
 public:
     static Date currentDate;
     Date(int, int, int);
     void SetValues(int, int, int);
     void Display();
     void ReadFromFile(ifstream&);
-    bool CompareDatesForMemories(Date&);
     bool CompareDatesForHome(Date&);
+    int DateDifference(Date&);
     int GetDay();
     int GetMonth();
     int GetYear();
 };
 Date Date::currentDate(0,0,0);
+
+//--------------------------------POST-------------------------------------------
 
 class Post
 {
@@ -96,40 +129,50 @@ class Post
     Comments** comments;
     int totalComments;
     int Likes;
-    Activity* activity;
+    PostContent* activity;
+    
 
 public:
-    Post();
+    static int TotalPosts;
+    Post(const char*, const char*, Object*, Date);
     char* GetId();
     void SetSharedBy(Object*&);
     void SetLikedBy(Object*&);
     void ReadDataFromFile(ifstream&);
     char* GetSharedBy();
-    void DisplayPost();
+    void GetSharedByDisplay();
+    char* GetText();
+    void GetDate();
+    virtual void DisplayPost();
     void DisplayLikedBy();
+    void DisplayDifference(Post*&);
     void AddComment(Comments*&);
-    void AddActivity(Activity*&);
+    void AddActivity(PostContent*&);
     void SelectPostsForHome();
-    Post* SelectPostsForMemories();
-    ~Post();
+    void SetPostID();
+    virtual ~Post();
 };
+int Post::TotalPosts = 0;
+
+//--------------------------------MEMORY-------------------------------------------
 
 class Memory :public Post
 {
     Post* OriginalPost;
 
 public:
-    Memory();
-    void SetOriginalPost(Post*&);
-    void Display();
+    Memory(Post*,const char*, Object*);
+    void DisplayPost();
     ~Memory();
 };
 
 class Object
 {
-    Post** Timeline;
     int totalPosts;
     char* ID;
+
+protected:
+    Post** Timeline;
 
 public:
     Object();
@@ -139,9 +182,12 @@ public:
     void AddPostToTimeline(Post*);
     void ViewTimeline();
     void PostsForHome();
-    Post* PostsForMemories();
-    ~Object();
+    Post* AvailablePosts(const char*);
+    virtual ~Object();
 };
+
+
+//--------------------------------PAGE-------------------------------------------
 
 class Page : public Object
 {
@@ -149,11 +195,12 @@ class Page : public Object
 
 public:
     Page();
-    char* GetTitle();
     void ReadDataFromFile(ifstream&);
     void Display();
     ~Page();
 };
+
+//--------------------------------USER-------------------------------------------
 
 class User : public Object
 {
@@ -164,7 +211,6 @@ class User : public Object
     Page** LikedPages;   
     int totalFriends;
     int totalPages;
-    Memory* memory;
 
 public:
     User();
@@ -177,9 +223,11 @@ public:
     void ViewFriendList();
     void ViewLikedPages();
     void ViewHome();
-    void ShareMemory();
     ~User();
 };
+
+
+//--------------------------------CONTROLLER-------------------------------------------
 
 class Controller
 {
@@ -208,34 +256,53 @@ public:
     void PageDisplay(const char*);
     void ViewPost(const char*);
     void PostDisplay(const char*);
-    void LikeAPost(const char*);
+    void LikeAPost(const char*, const char*);
     void ViewLikes(const char*);
     void LoadData();
     void DisplayFunctionalities();
     ~Controller();
 };
 
+//--------------------------------COMMENTS-------------------------------------------
+
 class Comments
 {
     char* ID;
     Object* CommentBy;
     char* text;
+    
 
 public:
+    static int TotalComments;
     Comments();
-    void SetValues(char*, Object*&, char*);
+    Comments(const char*, Object*,const char*);
+    void SetCommentsID();
     void Display();
     ~Comments();
 };
+int Comments::TotalComments = 0;
 
-class Activity {
+//--------------------------------POST CONTENT-------------------------------------------
+
+class PostContent
+{
+public:
+    virtual void Display();
+    virtual void SetActivity();
+    virtual ~PostContent();
+};
+
+//--------------------------------ACTIVITY-------------------------------------------
+
+class Activity : public PostContent
+{
     int type;
     char* value;
 
 public:
     Activity();
-    void SetActivity(int, char*);
-    void DisplayActivity();
+    Activity(int, char*);
+    void Display();
     ~Activity();
 };
 
@@ -255,25 +322,19 @@ void Date::SetValues(int d, int m, int y)
     year = y;
 }
 
-bool Date::CompareDatesForMemories(Date& date)
+
+bool Date::CompareDatesForHome(Date& date)
 {
-    if (day == date.GetDay() && month == date.GetMonth() && year>date.GetYear())
-    {
-        cout << "On this day " << year - date.GetYear() << " year ago:\n" << endl;
+    if ((date.GetDay() <= day && date.GetDay() >= (day- 2)) && date.GetMonth() == month && date.GetYear()==year)
         return true;
-    }
-        
+
     else
         return false;
 }
 
-bool Date::CompareDatesForHome(Date& date)
+int Date::DateDifference(Date& date)
 {
-    if (date.GetDay() <= day && date.GetDay() >= (day- 2))
-        return true;
-
-    else
-        return false;
+    return year - date.GetYear();
 }
 
 int Date::GetDay()
@@ -293,7 +354,33 @@ int Date::GetYear()
 
 void Date::Display()
 {
-    cout << day << "/" << month << "/" << year;
+    if ((day == currentDate.GetDay()) && (month == currentDate.GetMonth()) && (year == currentDate.GetYear()))
+        cout << "today";
+
+    else if ((day + 1 == currentDate.GetDay()) && (month == currentDate.GetMonth()) && (year == currentDate.GetYear()))
+        cout << "1 day";
+
+    else if ((day + 2 == currentDate.GetDay()) && (month == currentDate.GetMonth()) && (year == currentDate.GetYear()))
+        cout << "2 day";
+
+    else if ((day + 3 == currentDate.GetDay()) && (month == currentDate.GetMonth()) && (year == currentDate.GetYear()))
+        cout << "3 day";
+
+    else if ((day + 4 == currentDate.GetDay()) && (month == currentDate.GetMonth()) && (year == currentDate.GetYear()))
+        cout << "4 day";
+
+    else if ((day + 5 == currentDate.GetDay()) && (month == currentDate.GetMonth()) && (year == currentDate.GetYear()))
+        cout << "5 day";
+
+    else if ((day + 6 == currentDate.GetDay()) && (month == currentDate.GetMonth()) && (year == currentDate.GetYear()))
+        cout << "6 day";
+
+    else if ((day + 7 == currentDate.GetDay()) && (month == currentDate.GetMonth()) && (year == currentDate.GetYear()))
+        cout << "7 day";
+
+    else
+        cout << day << "/" << month << "/" << year;
+    
 }
 
 void Date::ReadFromFile(ifstream& fin)
@@ -305,16 +392,20 @@ void Date::ReadFromFile(ifstream& fin)
 
 //------------------------------Post Class------------------------------
 
-Post::Post()
+Post::Post(const char* id=nullptr, const char* txt=nullptr, Object* sharedby=nullptr, Date date=Date::currentDate)
 {
-    Id = nullptr;
-    text = nullptr;
-    SharedBy = nullptr;
+    if(id)
+        Id = Helpers::GetStringFromBuffer(id);
+    if(txt)
+        text = Helpers::GetStringFromBuffer(txt);
+    SharedBy = sharedby;
+    SharedDate = date;
     LikedBy = nullptr;
     comments = nullptr;
     totalComments = 0;
     Likes = 0;
     activity = nullptr;
+
 }
 
 char* Post::GetId()
@@ -370,7 +461,8 @@ void Post::ReadDataFromFile(ifstream& fin)
     SharedDate.ReadFromFile(fin);
 
     char temp2[500];
-    fin >> std::ws;
+    /*fin >> std::ws;*/
+    fin.ignore();
     fin.getline(temp2, 500);
     text = Helpers::GetStringFromBuffer(temp2);
 
@@ -378,7 +470,24 @@ void Post::ReadDataFromFile(ifstream& fin)
 
 char* Post::GetSharedBy()
 {
-    return SharedBy->GetID();
+    if(SharedBy)
+        return SharedBy->GetID();
+    
+}
+
+void Post::GetSharedByDisplay()
+{
+   SharedBy->Display();
+}
+
+char* Post::GetText()
+{
+    return text;
+}
+
+void Post::GetDate()
+{
+    SharedDate.Display();
 }
 
 void Post::DisplayPost()
@@ -387,16 +496,26 @@ void Post::DisplayPost()
     SharedBy->Display();
     cout<< "(";
     SharedDate.Display();
-    cout << ")" << endl<<endl;
+    cout << ")" << endl;
+    cout << "\n(" << Id << ")\n" << endl;
     SharedBy->Display();
     if(activity)
-        activity->DisplayActivity();
+        activity->Display();
     cout << endl;
     cout << "\t'" << text << "'" << endl;
     cout << endl;
     for (int i = 0; i < totalComments; i++)
         comments[i]->Display();
 
+}
+
+void Post::DisplayDifference(Post*& pst)
+{
+    int x = this->SharedDate.DateDifference(pst->SharedDate);
+    if (x > 0)
+        cout << "\n------------" << x << " years ago------------" << endl;
+    else if(x==0)
+        cout << "\n------------few days ago------------" << endl;
 }
 
 void Post::AddComment(Comments*& cmt )
@@ -430,7 +549,7 @@ void Post::AddComment(Comments*& cmt )
     }
 }
 
-void Post::AddActivity(Activity*& act)
+void Post::AddActivity(PostContent*& act)
 {
     if (activity == nullptr)
     {
@@ -442,6 +561,7 @@ void Post::DisplayLikedBy()
 {
     for (int i = 0; i < Likes; i++)
     {
+        cout << LikedBy[i]->GetID()<<"- ";
         LikedBy[i]->Display();
         cout << endl;
     }
@@ -464,20 +584,16 @@ void Post::SelectPostsForHome()
     return;
 }
 
-Post* Post::SelectPostsForMemories()
+void Post::SetPostID()
 {
-    bool check = false;
+    char temp[10];
+    int numb = TotalPosts + 1;
 
-    check = Date::currentDate.CompareDatesForMemories(SharedDate);
+    _itoa_s(numb, temp, 10);
 
-    if (check)
-    {
-        return this;
-    }
+    Id = Helpers::StrConcat("post", temp);
 
-    else
-        return nullptr;
-
+    TotalPosts++;
 }
 
 Post::~Post()
@@ -488,26 +604,32 @@ Post::~Post()
     if (text)
         delete[] text;
 
-    SharedBy = nullptr;
+    if (LikedBy)
+    {
+        delete[] LikedBy;
+    }
 
-    for (int i = 0; i < Likes; i++)
-        LikedBy[i] = nullptr;
-
-    delete[] LikedBy;
+    if (comments)
+    {
+        for (int i = 0; i < totalComments; i++)
+            delete comments[i];
+        delete[] comments;
+    }
 
     if (activity)
-        activity = nullptr;
+        delete[] activity;
 
 }
 
-//---------------------------Memory Class---------------------
+//---------------------------Memory Class-----------------------
 
-Memory::Memory():Post()
+Memory::Memory(Post* pst=nullptr, const char* text=nullptr, Object* obj=nullptr) : Post(nullptr, text, obj, Date::currentDate)
 {
-    OriginalPost = nullptr;
+    OriginalPost = pst;
+    this->SetPostID();
 }
 
-void Memory::Display()
+void Memory::DisplayPost()
 {
     if (OriginalPost == nullptr)
     {
@@ -516,38 +638,53 @@ void Memory::Display()
 
     else
     {
-        OriginalPost->DisplayPost();
+        cout << "---";
+        this->GetSharedByDisplay();
+        cout<< " (";
+        this->GetDate();
+        cout << ")" << endl;
+        cout << "\nShared a memory:\n" << endl;
+        cout <<"("<< this->GetId()<<")" << endl;
+        cout << "\n\t'" <<this->GetText() << "'" << endl;
+        cout << "\n\t\t'" << OriginalPost->GetText() << "'" << endl;
+        this->DisplayDifference(OriginalPost);
     }
-}
-
-void Memory::SetOriginalPost(Post*& pst)
-{
-    if(OriginalPost==nullptr)
-        OriginalPost = pst;
-    
 }
 
 Memory::~Memory()
 {
-    if (OriginalPost)
-        OriginalPost = nullptr;
 }
 
-//--------------------------Activity Class----------------------
+//--------------------------Post Content------------------------
+
+void PostContent::Display()
+{
+}
+
+void PostContent::SetActivity()
+{
+}
+
+PostContent::~PostContent()
+{
+}
+
+//--------------------------Activity Class--------------------------
 
 Activity::Activity()
 {
     type = 0;
     value = nullptr;
+   
 }
 
-void Activity::SetActivity(int i, char* c)
+Activity::Activity(int i, char* c)
 {
     type = i;
     value = Helpers::GetStringFromBuffer(c);
 }
 
-void Activity::DisplayActivity()
+void Activity::Display()
 {
     if (type == 1)
         cout << " is feeling" << value<<"!" << endl;
@@ -620,7 +757,6 @@ void Object::AddPostToTimeline(Post* pst)
     }
 }
 
-
 void Object::ViewTimeline()
 {
     cout << endl;
@@ -638,20 +774,15 @@ void Object::PostsForHome()
         Timeline[i]->SelectPostsForHome();
 }
 
-Post* Object::PostsForMemories()
+Post* Object::AvailablePosts(const char* id)
 {
-    Post* temp = nullptr;
-
     for (int i = 0; i < totalPosts; i++)
     {
-        temp= Timeline[i]->SelectPostsForMemories();
-
-        if (temp)
-            return temp;
+        if(Helpers::CompareString(id, Timeline[i]->GetId()))
+            return Timeline[i];
     }
 
     return nullptr;
-       
 }
 
 Object::~Object()
@@ -659,10 +790,17 @@ Object::~Object()
     if (ID)
         delete[] ID;
 
-    for (int i = 0; i < totalPosts; i++)
-        Timeline[i] = nullptr;
-
-    delete[] Timeline;
+    if (Timeline)
+    {
+        for (int i = 0; i < totalPosts; i++)
+        {
+            if(Timeline[i])
+                delete Timeline[i];
+        }
+         
+        delete[] Timeline;
+    }
+    
 
 }
 
@@ -671,11 +809,6 @@ Object::~Object()
 Page::Page() :Object()
 {
     Title = nullptr;
-}
-
-char* Page::GetTitle()
-{
-    return Title;
 }
 
 void Page::ReadDataFromFile(ifstream& fin)
@@ -695,7 +828,7 @@ void Page::ReadDataFromFile(ifstream& fin)
 
 void Page::Display()
 {
-    cout << Object::GetID() << "-" << Title;
+    cout <<Title;
 }
 
 Page::~Page()
@@ -714,7 +847,6 @@ User::User() :Object()
     LikedPages = nullptr;
     totalFriends = 0;
     totalPages = 0;
-    memory = nullptr;
 }
 
 void User::AddFriend(User* const& frnd)
@@ -812,13 +944,14 @@ char* User::GetLname()
 
 void User::Display()
 {
-    cout << Object::GetID() << "-\t" << Fname << " " << Lname;
+    cout << Fname << " " << Lname;
 }
 
 void User::ViewFriendList()
 {
     for (int i = 0; i < totalFriends; i++)
     {
+        cout << FriendList[i]->GetID()<<"- ";
         FriendList[i]->Display();
         cout << endl;
     }
@@ -828,6 +961,7 @@ void User::ViewLikedPages()
 {
     for (int i = 0; i < totalPages; i++)
     {
+        cout << LikedPages[i]->GetID()<<"- ";
         LikedPages[i]->Display();
         cout << endl;
     }
@@ -845,17 +979,6 @@ void User::ViewHome()
 
 }
 
-void User::ShareMemory()
-{
-    Post* temp = PostsForMemories();
-
-    if (temp)
-    {
-        memory = new Memory;
-        memory->SetOriginalPost(temp);
-        memory->Display();
-    }
-}
 
 User::~User()
 {
@@ -866,17 +989,16 @@ User::~User()
     if (Lname)
         delete[] Lname;
 
-    for (int i = 0; i < totalFriends; i++)
-        FriendList[i] = nullptr;
-    delete[] FriendList;
-
-    for (int i = 0; i < totalPages; i++)
-        LikedPages[i] = nullptr;
-    delete[] LikedPages;
-
-    if (memory)
-        memory = nullptr;
-
+    if (FriendList)
+    {
+        delete[] FriendList;
+    }
+    
+    if (LikedPages)
+    {
+        delete[] LikedPages;
+    }
+    
 }
 
 //---------------------Comments-----------------------
@@ -888,21 +1010,35 @@ Comments::Comments()
     text = nullptr;
 }
 
-void Comments::SetValues(char* c1, Object*& obj, char* c2)
+Comments::Comments(const char* c1=nullptr, Object* obj=nullptr, const char* c2=nullptr)
 {
-    if(ID==nullptr)
+    if (c1 == nullptr)
+        SetCommentsID();
+    else
         ID = Helpers::GetStringFromBuffer(c1);
 
-    if (CommentBy == nullptr)
-        CommentBy = obj;
-
-    if (text == nullptr)
+    if (c2)
         text = Helpers::GetStringFromBuffer(c2);
+
+    CommentBy = obj;
        
+}
+
+void Comments::SetCommentsID()
+{
+    char temp[10];
+    int numb = TotalComments + 1;
+
+    _itoa_s(numb, temp, 10);
+
+    ID = Helpers::StrConcat("c", temp);
+
+    TotalComments++;
 }
 
 void Comments::Display()
 {
+    cout << "\t\t";
     CommentBy->Display();
     cout <<":'"<< text <<" '"<< endl;
     
@@ -912,9 +1048,6 @@ Comments::~Comments()
 {
     if (ID)
         delete[] ID;
-
-    if (CommentBy)
-        CommentBy = nullptr;
 
     if (text)
         delete[] text;
@@ -954,6 +1087,8 @@ Page* Controller::SearchPageByID(const char* c)
         if (Helpers::CompareString(c, AllPages[i]->GetID()))
             return AllPages[i];
     }
+
+    return nullptr;
 }
 
 Post* Controller::SearchPostByID(const char* c)
@@ -963,6 +1098,8 @@ Post* Controller::SearchPostByID(const char* c)
         if (Helpers::CompareString(c, AllPosts[i]->GetId()))
             return AllPosts[i];
     }
+
+    return nullptr;
 }
 
 void Controller::LoadAllUsers(const string& filename)
@@ -1024,6 +1161,8 @@ void Controller::LoadAllPosts(const string& filename)
 
     fin >> totalPosts;
 
+    Post::TotalPosts = totalPosts;
+
     AllPosts = new Post * [totalPosts];
 
     for (int i = 0; i < totalPosts; i++)
@@ -1046,7 +1185,7 @@ void Controller::LoadAllPosts(const string& filename)
         int index = 0;
 
         fin >> temp;
-        while (!Helpers::CompareString(temp, "-1"))
+        while (!Helpers::CompareString(temp, "-1") && index<=10)
         {
             obj2[index] = SearchObject(temp);
             AllPosts[i]->SetLikedBy(obj2[index]);
@@ -1054,10 +1193,10 @@ void Controller::LoadAllPosts(const string& filename)
 
             fin >> temp;
         }
-        
-
+       
         obj1->AddPostToTimeline(AllPosts[i]);
 
+        delete[] obj2;
     }
 }
 
@@ -1076,12 +1215,13 @@ void Controller::LoadAllComments(const string& filename)
 
     fin >> total;
 
+    Comments::TotalComments = total;
+
     char cID[5], pID[10], uID[5];
     char text[500];
 
     for (int i = 0; i < total; i++)
     {
-        Comments* temp1 = new Comments;
         
         fin >> cID;
         fin >> pID;
@@ -1094,7 +1234,8 @@ void Controller::LoadAllComments(const string& filename)
 
         fin.getline(text, 500);
 
-        temp1->SetValues(cID, temp3, text);
+
+        Comments* temp1 = new Comments(cID, temp3, text);
 
         temp2->AddComment(temp1);
 
@@ -1128,9 +1269,8 @@ void Controller::LoadActivities(const string& filename)
 
         fin.getline(value, 100);
 
-        Activity* temp2 = new Activity;
-        temp2->SetActivity(type, value);
-
+        PostContent* temp2 = new Activity(type, value);
+       
         temp1->AddActivity(temp2);
     }
 
@@ -1203,6 +1343,12 @@ void Controller::UserDisplay(const char* c)
 {
     User* temp = SearchUserByID(c);
 
+    if (temp == nullptr)
+    {
+        cout << "User not found :(" << endl;
+        return;
+    }
+        
     cout << "\nCurrent User:\t" << temp->GetID() << "-" << temp->GetFname() << " " << temp->GetLname() << endl;
 
     cout << "\n\n-----------------------------------------------------------" << endl;
@@ -1214,6 +1360,21 @@ void Controller::UserDisplay(const char* c)
     cout << "Command:\tLiked Pages" << endl;
     cout << "-----------------------------------------------------------\n" << endl;
     temp->ViewLikedPages();
+
+
+    cout << "\n\n-----------------------------------------------------------" << endl;
+    cout << "Command:\tShare a memory" << endl;
+    cout << "-----------------------------------------------------------\n" << endl;
+    Post* pst = temp->AvailablePosts("post10");
+    if (pst != nullptr)
+    {
+        Memory* memPtr = new Memory(pst, "Never thought I will be able to do!", temp);
+        temp->AddPostToTimeline(memPtr);
+        cout << temp->GetFname() << " " << temp->GetLname() << " shared a memory of " << pst->GetId() << endl<<endl;
+        memPtr->DisplayPost();
+    }
+
+  
 
     cout << "\n\n-----------------------------------------------------------" << endl;
     cout << "Command:\tTimeLine" << endl;
@@ -1227,14 +1388,29 @@ void Controller::UserDisplay(const char* c)
     temp->ViewHome();
 
     cout << "\n\n-----------------------------------------------------------" << endl;
-    cout << "Command:\tShare a memory" << endl;
+    cout << "Command:\tAdd a comment" << endl;
     cout << "-----------------------------------------------------------\n" << endl;
-    temp->ShareMemory();
+    Post* pst1 = SearchPostByID("post5");
+    if (pst1 != nullptr)
+    {
+        Comments* cmt = new Comments(nullptr, temp, " kiya baat hai !!!");
+        pst1->AddComment(cmt);
+        cout << temp->GetFname() << " " << temp->GetLname() << " commented on " << pst1->GetId() << endl << endl;
+        pst1->DisplayPost();
+    }
+
+
 }
 
 void Controller::ViewPage(const char* c)
 {
     Page* temp = SearchPageByID(c);
+
+    if (temp == nullptr)
+    {
+        cout << "Page not found :(" << endl;
+        return;
+    }
 
     cout << "\n\n-----------------------------------------------------------" << endl;
     cout << "Command:\tViewPage"<< endl;
@@ -1242,6 +1418,7 @@ void Controller::ViewPage(const char* c)
 
     temp->Display();
     temp->ViewTimeline();
+
 }
 
 void Controller::PageDisplay(const char* c)
@@ -1251,21 +1428,36 @@ void Controller::PageDisplay(const char* c)
 
 void Controller::ViewPost(const char* c)
 {
-    Post* temp1 = SearchPostByID("post11");
+    Post* temp1 = SearchPostByID(c);
+    if (temp1 == nullptr)
+    {
+        cout << "Post not found :(" << endl;
+        return;
+    }
+
     Object* temp2 = SearchObject(temp1->GetSharedBy());
+
+    User* user = SearchUserByID("u3");
+    Comments* cmtPtr = new Comments(nullptr, user, "wow very beautiful");
+    temp1->AddComment(cmtPtr);
 
     cout << "\n\n-----------------------------------------------------------" << endl;
     cout << "Command:\tViewPost(" <<c<<")"<< endl;
     cout << "-----------------------------------------------------------\n" << endl;
     temp1->DisplayPost();
-    
+
 }
 
-void Controller::LikeAPost(const char* c)
+void Controller::LikeAPost(const char* c, const char* user)
 {
     Post* temp1 = SearchPostByID(c);
+    if (temp1 == nullptr)
+    {
+        cout << "Post not found :(" << endl;
+        return;
+    }
 
-    Object* temp2 = SearchObject("u3");
+    Object* temp2 = SearchObject(user);
 
     temp1->SetLikedBy(temp2);
 
@@ -1282,27 +1474,34 @@ void Controller::LikeAPost(const char* c)
 void Controller::ViewLikes(const char* c)
 {
     Post* temp = SearchPostByID(c);
+    if (temp == nullptr)
+    {
+        cout << "Post not found :(" << endl;
+        return;
+    }
 
     cout << "\n\n-----------------------------------------------------------" << endl;
     cout << "Command:\tPostLikedBy" <<endl;
     cout << "-----------------------------------------------------------\n" << endl;
     cout << "Post : " << c << endl;
-    cout << "\nLiked By : " << endl;
+    cout << "\nLiked By : " << endl<<endl;
     temp->DisplayLikedBy();
+
+
 }
 
 void Controller::PostDisplay(const char* c)
 {
     ViewPost(c);
-    LikeAPost(c);
+    LikeAPost(c,"u3");
     ViewLikes(c);
 }
 
 void Controller::LoadData()
 {
     Date::currentDate.SetValues(17, 4, 2024);
-    LoadAllUsers("users.txt"); //Keep it easily configurable
-    LoadAllPages("pages.txt"); //Keep it easily configurable
+    LoadAllUsers("users.txt"); 
+    LoadAllPages("pages.txt"); 
     LoadAllPosts("posts.txt");
     LinkUsersAndPages("friends.txt");
     LoadAllComments("comments.txt");
@@ -1314,7 +1513,7 @@ void Controller::DisplayFunctionalities()
 {
     UserDisplay("u7");
     PageDisplay("p5");
-    PostDisplay("post6");
+    PostDisplay("post5");
 }
 
 Controller::~Controller()
@@ -1322,21 +1521,19 @@ Controller::~Controller()
     if (AllUsers)
     {
         for (int i = 0; i < totalUsers; i++)
-            AllUsers[i] = nullptr;
+            delete AllUsers[i];
         delete[] AllUsers;
     }
 
     if (AllPages)
     {
         for (int i = 0; i < totalPages; i++)
-            AllPages[i] = nullptr;
+            delete AllPages[i];
         delete[] AllPages;
     }
 
     if (AllPosts)
     {
-        for (int i = 0; i < totalPosts; i++)
-            AllPosts[i] = nullptr;
         delete[] AllPosts;
     }
 }
@@ -1345,10 +1542,13 @@ Controller::~Controller()
 
 int main() 
 {
-    Controller mainApp;
-    mainApp.LoadData();
-    mainApp.DisplayFunctionalities();
+    {
+        Controller mainApp;
+        mainApp.LoadData();
+        mainApp.DisplayFunctionalities();
 
+    }
+    
     _CrtDumpMemoryLeaks();
     return 0;
 }
